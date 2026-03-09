@@ -46,17 +46,39 @@ writeXStringSet(alignment_no_gap_penalty, "alignment_no_gap_penalty.fasta")
 # ----- b) Traduction et cadre de lecture ------ #
 ##################################################
 
-# Traduction des séquences nucléotidiques
-aa_seqs <- translate(seqs, genetic.code = getGeneticCode("1"))  # code génétique mitochondrial de vertébrés
+# Alignement d'acides aminées
+aa_alignment_1 <- AlignTranslation(seqs, geneticCode = getGeneticCode("2"), type = "AAStringSet", readingFrame = 1)
 
-# Alignement des protéines
-aa_alignment <- AlignSeqs(aa_seqs)
-writeXStringSet(aa_alignment, "aa_alignment.fasta")
+writeXStringSet(aa_alignment, "aa_alignment_1.fasta")
 
-# Décalage d’un cadre de lecture +1
-aa_seqs_shift <- translate(subseq(seqs, start=2), genetic.code = getGeneticCode("1"))
-aa_alignment_shift <- AlignSeqs(aa_seqs_shift)
+aa_alignment_2 <- AlignTranslation(seqs, geneticCode = getGeneticCode("2"), type = "AAStringSet", readingFrame = 2)
 
+writeXStringSet(aa_alignment_2, "aa_alignment_2.fasta")
+
+# Vérification
+# Nombre de codons stop par séquence
+stops_frame1 <- letterFrequency(aa_alignment_1, "*")
+
+# Résumé statistique (min, médiane, max)
+summary(stops_frame1)
+
+# Distribution : combien de séquences ont 0, 1, 2 stops, etc.
+table(stops_frame1)
+
+# Identifier les séquences contenant au moins un codon stop
+names(aa_alignment_1)[stops_frame1 > 0]
+
+# Nombre de codons stop par séquence
+stops_frame2 <- letterFrequency(aa_alignment_2, "*")
+
+# Résumé statistique
+summary(stops_frame2)
+
+# Distribution du nombre de stops
+table(stops_frame2)
+
+# Identifier les séquences contenant au moins un codon stop
+names(aa_alignment_2)[stops_frame2 > 0]
 
 #############################################
 # ------ c) Phylogénie nucléotidique ------ #
