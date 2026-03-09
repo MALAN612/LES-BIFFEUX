@@ -162,14 +162,15 @@ aa_alignments <- list(
 )
 
 # Modèles d'évolution des protéines
-aa_models <- c("LG", "JTT", "BLOSUM62")
+aa_models <- c("LG", "JTT", "Blosum62")
+
+results <- list()
+
+par(mfrow = c(2, 3), mar = c(2, 2, 4, 1))
 
 # Conversion en phyDat (phangorn)
 aa_phy <- lapply(aa_alignments, function(x) phyDat(as.matrix(x), type="AA"))
 # Liste pour stocker les résultats
-results <- list()
-
-par(mfrow = c(2, 3), mar = c(2, 2, 4, 1))
 
 for (frame_name in names(aa_phy)) {
     phy_data <- aa_phy[[frame_name]]
@@ -177,36 +178,48 @@ for (frame_name in names(aa_phy)) {
     for (model in aa_models) {
         cat("\n--- Frame:", frame_name, "- Model:", model, "---\n")
 
-        # Calcul de distance selon le modèle choisi
+        # Calcul distance et arbre
         dist_aa <- dist.ml(phy_data, model = model)
-
-        # Construction arbre NJ
         tree_nj <- NJ(dist_aa)
 
-        # Bootstrap NJ
-        bs <- bootstrap.phyDat(phy_data, FUN=function(xx) NJ(dist.ml(xx, model=model)), bs=1000)
+        # Bootstrap (Remettre bs=1000 pour le rapport final)
+        bs_trees <- bootstrap.phyDat(phy_data,
+                                     FUN = function(x) NJ(dist.ml(x, model = model)),
+                                     bs = 10)
 
-        # Stocker les résultats
-        results[[paste(frame_name, model, sep="_")]] <- list(tree=tree_nj, bootstrap=bs)
+        # Intégrer les valeurs de bootstrap à l'arbre original
+        # p = 0 permet de garder tous les labels pour le calcul de la moyenne
+        tree_with_bs <- plotBS(tree_nj, bs_trees, type = "none", p = 0)
 
-        # Affichage arbre avec supports
-        plot(tree_nj, main=paste("NJ -", model, "-", frame_name), cex=0.8)
-        nodelabels(bs)
+        # Stockage
+        results[[paste(frame_name, model, sep="_")]] <- tree_with_bs
 
-        # Calculer la robustesse moyenne
-        mean_bs <- mean(bs, na.rm=TRUE)
-        cat("Robustesse moyenne bootstrap:", mean_bs, "\n")
+        # Affichage
+        plot(tree_with_bs, main=paste("NJ -", model, "-", frame_name), cex=0.8)
+
+        # Calcul de la moyenne robuste
+        # On extrait les labels, on retire les vides, on convertit en chiffre
+        boot_values <- as.numeric(tree_with_bs$node.label)
+        mean_bs <- mean(boot_values, na.rm = TRUE)
+
+        cat("Robustesse moyenne bootstrap:", round(mean_bs, 2), "%\n")
     }
 }
 
-# Synthèse des résultats
+# --- RÉSUMÉ DE LA ROBUSTESSE ---
 cat("\n--- RÉSUMÉ DE LA ROBUSTESSE ---\n")
+
+# Création d'un data.frame à partir de la liste 'results'
 df_summary <- data.frame(
-    Analyse = names(results_aa),
-    Mean_Bootstrap = sapply(results_aa, function(x) x$mean_bs)
+    Analyse = names(results),
+    Mean_Bootstrap = sapply(results, function(x) {
+        valeurs <- as.numeric(x$node.label)
+        mean(valeurs, na.rm = TRUE)
+    })
 )
+
 print(df_summary)
 
-# Identifier le meilleur modèle pour le cadre 1
-best_idx <- which.max(df_summary$Mean_Bootstrap[1:3])
-cat("\nLe modèle maximisant la robustesse pour le cadre 1 est :", aa_models[best_idx], "\n")
+# Trouver le gagnant pour le cadre 1 (les 3 premières lignes)
+best_model_idx <- which.max(df_summary$Mean_Bootstrap[1:3])
+cat("\nModèle le plus robuste (Frame 1) :", df_summary$Analyse[best_model_idx], "\n")
