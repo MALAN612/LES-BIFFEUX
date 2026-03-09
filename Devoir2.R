@@ -19,7 +19,10 @@ library(ape)
 library(phangorn)
 library(Biostrings)
 
+########################################################
 # ----- a) Importation et alignement (DECIPHER) ------ #
+########################################################
+
 # Importation des données
 data <- readDNAStringSet("Cetacea COI.fasta")
 
@@ -39,7 +42,9 @@ BrowseSeqs(aligned_no_gap, highlight = 0)
 # Sauvegarde l'alignement final
 writeXStringSet(aligned_no_gap, "aligned_sequences.fasta")
 
+##################################################
 # ----- b) Traduction et cadre de lecture ------ #
+##################################################
 
 # Traduction avec code mitochondrial vertébré
 aligned_dna <- AlignTranslation(data,
