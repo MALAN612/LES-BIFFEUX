@@ -5,19 +5,10 @@
 
 # ------ Installation des libraries nécessaires ------ #
 
-if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-BiocManager::install("DECIPHER")
-
-if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-BiocManager::install("Biostrings")
-
-install.packages('ape')
-
-install.packages("phangorn", dependencies = TRUE)
-
+if (!requireNamespace("DECIPHER", quietly = TRUE)) BiocManager::install("DECIPHER")
+if (!requireNamespace("Biostrings", quietly = TRUE)) BiocManager::install("Biostrings")
+if (!requireNamespace("ape", quietly = TRUE)) install.packages("ape")
+if (!requireNamespace("phangorn", quietly = TRUE)) install.packages("phangorn")
 
 library(DECIPHER)
 library(Biostrings)
@@ -49,7 +40,7 @@ writeXStringSet(alignment_no_gap_penalty, "alignment_no_gap_penalty.fasta")
 # Alignement d'acides aminées
 aa_alignment_1 <- AlignTranslation(seqs, geneticCode = getGeneticCode("2"), type = "AAStringSet", readingFrame = 1)
 
-writeXStringSet(aa_alignment, "aa_alignment_1.fasta")
+writeXStringSet(aa_alignment_1, "aa_alignment_1.fasta")
 
 aa_alignment_2 <- AlignTranslation(seqs, geneticCode = getGeneticCode("2"), type = "AAStringSet", readingFrame = 2)
 
@@ -84,126 +75,138 @@ names(aa_alignment_2)[stops_frame2 > 0]
 # ------ c) Phylogénie nucléotidique ------ #
 #############################################
 
-# Alignement en format "DNAbin" pour ape
-dna_bin <- as.DNAbin(alignment_default)
+# Conversion de l'alignement en format DNAbin (ape)
+dna <- as.DNAbin(alignment_default)
 
-# Matrices de distance avec les bons codes
-dist_JC   <- dist.dna(dna_bin, model = "JC69")
-dist_K2P  <- dist.dna(dna_bin, model = "K80")
-dist_TN93 <- dist.dna(dna_bin, model = "TN93")
-dist_GG   <- dist.dna(dna_bin, model = "GG95") # Correction ici
+# Matrices de distances avec les différents modèles
+dist_JC  <- dist.dna(dna, model = "JC69")    # Jukes-Cantor
+dist_K80 <- dist.dna(dna, model = "K80")     # Kimura 2 paramètres
+dist_TN  <- dist.dna(dna, model = "TN93")    # Tamura-Nei
+dist_LOG <- dist.dna(dna, model = "logdet")  # Galtier-Gouy (LogDet)
 
-# Force la conversion en matrice.
-dna_mat <- as.matrix(dna_bin)
+# Construction des arbres
+tree_JC  <- nj(dist_JC)
+tree_K80 <- nj(dist_K80)
+tree_TN  <- nj(dist_TN)
+tree_LOG <- nj(dist_LOG)
 
-# Vérifie que c'est bien une matrice
-is.matrix(dna_mat) # Doit retourner TRUE
+# boot.phylo nécessite une matrice
+dna_matrix <- as.matrix(dna)
 
-# Analyse Bootstrap
-run_bootstrap <- function(dna_input, mod) {
-    # Arbre de référence
-    d <- dist.dna(dna_input, model = mod)
-    tree <- nj(d)
+# Bootstrap (1000 itérations)
+boot_JC <- boot.phylo(tree_JC, dna_matrix,
+                      function(x) nj(dist.dna(x, model="JC69")),
+                      B = 1000)
 
-    # Bootstrap (1000 itérations)
-    boot_scores <- boot.phylo(tree, dna_input, function(x) nj(dist.dna(x, model = mod)), B = 1000)
+boot_K80 <- boot.phylo(tree_K80, dna_matrix,
+                       function(x) nj(dist.dna(x, model="K80")),
+                       B = 1000)
 
-    return(boot_scores)
-}
+boot_TN <- boot.phylo(tree_TN, dna_matrix,
+                      function(x) nj(dist.dna(x, model="TN93")),
+                      B = 1000)
 
-# Lance les calculs sur dna_mat
-boot_JC   <- run_bootstrap(dna_mat, "JC69")
-boot_K2P  <- run_bootstrap(dna_mat, "K80")
-boot_TN93 <- run_bootstrap(dna_mat, "TN93")
-boot_GG   <- run_bootstrap(dna_mat, "GG95")
+boot_LOG <- boot.phylo(tree_LOG, dna_matrix,
+                       function(x) nj(dist.dna(x, model="logdet")),
+                       B = 1000)
 
-# Calcul des moyennes en ignorant les NA
-scores_moyens <- c(
-    JC   = mean(boot_JC, na.rm = TRUE),
-    K2P  = mean(boot_K2P, na.rm = TRUE),
-    TN93 = mean(boot_TN93, na.rm = TRUE),
-    GG   = mean(boot_GG, na.rm = TRUE)
-)
+# Calculer la moyenne en ignorant les valeurs manquantes
+mean(boot_JC, na.rm = TRUE)
+mean(boot_K80, na.rm = TRUE)
+mean(boot_TN, na.rm = TRUE)
+mean(boot_LOG, na.rm = TRUE)
 
-print(scores_moyens)
-
-# Identifie le modèle le plus robuste
-meilleur_ape <- names(which.max(scores_moyens))
-cat("Le modèle le plus robuste selon le bootstrap est :", meilleur_ape, "\n")
-
-
-# Conversion au format phyDat
-dna_pd <- as.phyDat(dna_mat)
+# Conversion vers format phangorn
+dna_phy <- phyDat(as.matrix(alignment_default), type="DNA")
 
 # Test de modèles
-mt <- modelTest(dna_pd)
+model_test <- modelTest(dna_phy)
 
-# Trouve le meilleur modèle selon le critère BIC
-best_model <- mt[which.min(mt$BIC), ]
-print(best_model)
+model_test
 
-# Transforme le meilleur résultat du test en objet PML
-fit_best <- as.pml(mt, model = "BIC")
+# Modèle avec le plus petit AICc
+best_model <- model_test$Model[which.min(model_test$AICc)]
+best_model
 
-alpha_val <- fit_best$shape
-inv_val   <- fit_best$inv
+# arbre NJ initial
+tree_start <- nj(dist.dna(dna))
 
-cat("Paramètre Gamma (alpha) :", alpha_val, "\n")
-cat("Sites invariants (I) :", inv_val, "\n")
+# modèle initial
+fit <- pml(tree_start, data=dna_phy)
 
-# Optimisation de l'arbre
-fit_optim <- optim.pml(fit_best, optGamma = TRUE, optInv = TRUE, optEdge = TRUE)
-
-# Affichage de l'arbre final
-par(mar = c(1, 1, 3, 1))
-plot(fit_optim$tree, main = paste("Arbre Final (ML) - Modèle :", best_model$Model), cex = 0.8)
-add.scale.bar()
-
-
-###################################################################
-# ----- d) Analyse des acides aminées et cadres de lecture ------ #
-###################################################################
-
-# Calcul pour l'alignement standard
-dist_LG  <- dist.ml(aa_pd_default, model="LG")
-dist_JTT <- dist.ml(aa_pd_default, model="JTT")
-dist_B62 <- dist.ml(aa_pd_default, model="Blosum62")
-
-# Fonction pour automatiser le bootstrap AA
-run_aa_bootstrap <- function(pd_data, model_name) {
-    # Arbre NJ de référence
-    tree_ref <- nj(dist.ml(pd_data, model = model_name))
-
-    # Bootstrap
-    # On convertit en matrice pour boot.phylo
-    boot <- boot.phylo(tree_ref, as.matrix(as.character(pd_data)),
-                       function(x) nj(dist.ml(as.phyDat(x, type="AA"), model = model_name)),
-                       B = 1000, quiet = TRUE)
-    return(boot)
-}
-
-# Calcul de la robustesse pour le cadre par défaut (Standard)
-boot_LG_std  <- run_aa_bootstrap(aa_pd_default, "LG")
-boot_JTT_std <- run_aa_bootstrap(aa_pd_default, "JTT")
-boot_B62_std <- run_aa_bootstrap(aa_pd_default, "Blosum62")
-
-# Calcul pour le cadre de lecture décalé (LG est le témoin)
-boot_LG_shift <- run_aa_bootstrap(aa_pd_shift, "LG")
-
-# Calcul des moyennes en ignorant les NA (valeurs manquantes)
-res_aa <- data.frame(
-    Modèle = c("LG", "JTT", "Blosum62", "LG_Shifté"),
-    Moyenne_Bootstrap = c(
-        mean(boot_LG_std, na.rm = TRUE),
-        mean(boot_JTT_std, na.rm = TRUE),
-        mean(boot_B62_std, na.rm = TRUE),
-        mean(boot_LG_shift, na.rm = TRUE)
-    )
+# optimisation du modèle (exemple pour GTR+G+I)
+fit_opt <- optim.pml(
+    fit,
+    model="GTR",
+    optInv=TRUE,
+    optGamma=TRUE
 )
 
-print(res_aa)
+# arbre final
+plot(fit_opt$tree, main=paste("ML tree -", best_model), cex=0.8)
 
-# Visualisation des deux topologies AA pour comparaison
-par(mfrow = c(1, 2))
-plot(nj(dist_LG), main = "Topologie Standard (LG)")
-plot(nj(dist.ml(aa_pd_shift, model="LG")), main = "Topologie Shiftée (Bruit)")
+# bootstrap ML
+bs <- bootstrap.pml(fit_opt, bs=1000)
+
+plotBS(fit_opt$tree, bs)
+
+
+#################################################
+# ------ d) Alignement des acides aminés ------ #
+#################################################
+
+# Choisir l'alignement à tester : cadre de lecture 1 et cadre modifié 2
+aa_alignments <- list(
+    frame1 = aa_alignment_1,
+    frame2 = aa_alignment_2
+)
+
+# Modèles d'évolution des protéines
+aa_models <- c("LG", "JTT", "BLOSUM62")
+
+# Conversion en phyDat (phangorn)
+aa_phy <- lapply(aa_alignments, function(x) phyDat(as.matrix(x), type="AA"))
+# Liste pour stocker les résultats
+results <- list()
+
+par(mfrow = c(2, 3), mar = c(2, 2, 4, 1))
+
+for (frame_name in names(aa_phy)) {
+    phy_data <- aa_phy[[frame_name]]
+
+    for (model in aa_models) {
+        cat("\n--- Frame:", frame_name, "- Model:", model, "---\n")
+
+        # Calcul de distance selon le modèle choisi
+        dist_aa <- dist.ml(phy_data, model = model)
+
+        # Construction arbre NJ
+        tree_nj <- NJ(dist_aa)
+
+        # Bootstrap NJ
+        bs <- bootstrap.phyDat(phy_data, FUN=function(xx) NJ(dist.ml(xx, model=model)), bs=1000)
+
+        # Stocker les résultats
+        results[[paste(frame_name, model, sep="_")]] <- list(tree=tree_nj, bootstrap=bs)
+
+        # Affichage arbre avec supports
+        plot(tree_nj, main=paste("NJ -", model, "-", frame_name), cex=0.8)
+        nodelabels(bs)
+
+        # Calculer la robustesse moyenne
+        mean_bs <- mean(bs, na.rm=TRUE)
+        cat("Robustesse moyenne bootstrap:", mean_bs, "\n")
+    }
+}
+
+# Synthèse des résultats
+cat("\n--- RÉSUMÉ DE LA ROBUSTESSE ---\n")
+df_summary <- data.frame(
+    Analyse = names(results_aa),
+    Mean_Bootstrap = sapply(results_aa, function(x) x$mean_bs)
+)
+print(df_summary)
+
+# Identifier le meilleur modèle pour le cadre 1
+best_idx <- which.max(df_summary$Mean_Bootstrap[1:3])
+cat("\nLe modèle maximisant la robustesse pour le cadre 1 est :", aa_models[best_idx], "\n")
