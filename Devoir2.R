@@ -223,3 +223,50 @@ print(df_summary)
 # Trouver le gagnant pour le cadre 1 (les 3 premières lignes)
 best_model_idx <- which.max(df_summary$Mean_Bootstrap[1:3])
 cat("\nModèle le plus robuste (Frame 1) :", df_summary$Analyse[best_model_idx], "\n")
+
+
+###########################################################
+# ------ e) Analyse modelTest par cadre de lecture ------ #
+###########################################################
+
+# Création des 3 cadres de lecture (Nucléotides)
+dna_frames <- list(
+    frame1 = seqs,
+    frame2 = subseq(seqs, start = 2),
+    frame3 = subseq(seqs, start = 3)
+)
+
+results_ml_frames <- list()
+
+# Boucle sur les 3 cadres
+for (f_name in names(dna_frames)) {
+    cat("\n\n=== ANALYSE :", f_name, "===\n")
+
+    # Alignement et conversion
+    aln <- AlignSeqs(dna_frames[[f_name]], verbose = FALSE)
+    phy_dat <- phyDat(as.matrix(aln), type = "DNA")
+
+    # i- Trouver le meilleur modèle avec modelTest()
+    cat("Recherche du meilleur modèle...\n")
+    mt <- modelTest(phy_dat)
+    best_mod <- mt$Model[which.min(mt$AICc)]
+    cat("Meilleur modèle (AICc) pour", f_name, ":", best_mod, "\n")
+
+    # Reconstruction ML avec le modèle trouvé
+    # On part d'un arbre NJ pour l'optimisation
+    tree_init <- nj(dist.dna(as.DNAbin(phy_dat), model = "TN93"))
+    fit <- pml(tree_init, data = phy_dat)
+
+    # Mise à jour du modèle selon modelTest (on simplifie vers le modèle de base)
+    # parse_model est une simplification, on utilise souvent GTR ou le modèle spécifique
+    fit_opt <- optim.pml(fit, model = "GTR", optInv = TRUE, optGamma = TRUE)
+
+    # Bootstrap ML (1000 itérations)
+    cat("Calcul du Bootstrap ML (1000 itérations)...\n")
+    bs_ml <- bootstrap.pml(fit_opt, bs = 1000, optInv = TRUE, optGamma = TRUE)
+
+    # Sauvegarde et affichage
+    results_ml_frames[[f_name]] <- list(fit = fit_opt, bs = bs_ml, model = best_mod)
+
+    plotBS(fit_opt$tree, bs_ml, main = paste("ML Tree -", f_name, "-", best_mod))
+}
