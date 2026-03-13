@@ -39,45 +39,36 @@ sum(letterFrequency(alignment_no_gap, "-"))
 
 # Export pour vérification
 writeXStringSet(alignment_default, "alignment_default.fasta")
-writeXStringSet(alignment_no_gap_penalty, "alignment_no_gap_penalty.fasta")
+writeXStringSet(alignment_no_gap, "alignment_no_gap.fasta")
 
 ##################################################
 # ----- b) Traduction et cadre de lecture ------ #
 ##################################################
 
 # Alignement d'acides aminées
+aa_alignment_NA <- AlignTranslation(seqs, geneticCode = getGeneticCode("2"), type = "AAStringSet", readingFrame = NA)
+writeXStringSet(aa_alignment_NA, "aa_alignment_NA.fasta")
+
 aa_alignment_1 <- AlignTranslation(seqs, geneticCode = getGeneticCode("2"), type = "AAStringSet", readingFrame = 1)
-
 writeXStringSet(aa_alignment_1, "aa_alignment_1.fasta")
-
-aa_alignment_2 <- AlignTranslation(seqs, geneticCode = getGeneticCode("2"), type = "AAStringSet", readingFrame = 2)
-
-writeXStringSet(aa_alignment_2, "aa_alignment_2.fasta")
 
 # Vérification
 # Nombre de codons stop par séquence
+stops_NA <- letterFrequency(aa_alignment_NA, "*")
 stops_frame1 <- letterFrequency(aa_alignment_1, "*")
 
 # Résumé statistique (min, médiane, max)
+summary(stops_NA)
 summary(stops_frame1)
 
 # Distribution : combien de séquences ont 0, 1, 2 stops, etc.
+table(stops_NA)
 table(stops_frame1)
 
 # Identifier les séquences contenant au moins un codon stop
+names(aa_alignment_NA)[stops_NA > 0]
 names(aa_alignment_1)[stops_frame1 > 0]
 
-# Nombre de codons stop par séquence
-stops_frame2 <- letterFrequency(aa_alignment_2, "*")
-
-# Résumé statistique
-summary(stops_frame2)
-
-# Distribution du nombre de stops
-table(stops_frame2)
-
-# Identifier les séquences contenant au moins un codon stop
-names(aa_alignment_2)[stops_frame2 > 0]
 
 #############################################
 # ------ c) Phylogénie nucléotidique ------ #
@@ -87,16 +78,18 @@ names(aa_alignment_2)[stops_frame2 > 0]
 dna <- as.DNAbin(alignment_default)
 
 # Matrices de distances avec les différents modèles
-dist_JC  <- dist.dna(dna, model = "JC69")    # Jukes-Cantor
+dist_JC  <- dist.dna(dna, pairwise.deletion = FALSE, model = "JC69")    # Jukes-Cantor
 dist_K80 <- dist.dna(dna, model = "K80")     # Kimura 2 paramètres
 dist_TN  <- dist.dna(dna, model = "TN93")    # Tamura-Nei
 dist_LOG <- dist.dna(dna, model = "logdet")  # Galtier-Gouy (LogDet)
 
 # Construction des arbres
-tree_JC  <- nj(dist_JC)
-tree_K80 <- nj(dist_K80)
-tree_TN  <- nj(dist_TN)
-tree_LOG <- nj(dist_LOG)
+arbre_JC  <- nj(dist_JC)
+arbre_K80 <- nj(dist_K80)
+arbre_TN  <- nj(dist_TN)
+arbre_LOG <- nj(dist_LOG)
+plot(dist_JC, main = "Valeurs de distance entre les séquences par position nucléotidique", ylab = "distance", xlab= "position")
+
 
 # boot.phylo nécessite une matrice
 dna_matrix <- as.matrix(dna)
