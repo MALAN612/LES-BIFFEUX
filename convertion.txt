@@ -1,0 +1,61 @@
+Tu peux utiliser ce schéma général :
+
+"Nom latin"[Organism] AND COI[Gene] AND mitochondrion[Filter] NOT genome[Title] NOT environmental[Title]
+Exemples concrets :
+
+
+
+
+
+Lamantin (Trichechus manatus)
+"Trichechus manatus"[Organism] AND COI[Gene] AND mitochondrion[Filter]
+
+Trichechus manatus voucher
+
+
+
+Dugong (Dugong dugon)
+"Dugong dugon"[Organism] AND COI[Gene] AND mitochondrion[Filter]
+
+Dugong dugon voucher
+
+
+
+Éléphant d’Afrique (Loxodonta africana)
+"Loxodonta africana"[Organism] AND COI[Gene] AND mitochondrion[Filter]
+
+Loxodonta africana voucher
+
+
+
+Éléphant d’Asie (Elephas maximus)
+"Elephas maximus"[Organism] AND COI[Gene] AND mitochondrion[Filter]
+
+Elephas maximus voucher
+
+
+
+Hippopotame (Hippopotamus amphibius)
+"Hippopotamus amphibius"[Organism] AND COI[Gene] AND mitochondrion[Filter]
+
+Hippopotamus amphibius
+
+
+
+Hippopotame nain (Choeropsis liberiensis / Hexaprotodon liberiensis)
+"Choeropsis liberiensis"[Organism] AND COI[Gene] AND mitochondrion[Filter]
+
+Hexaprotodon liberiensis isolate
+
+
+Tortue luth (Dermochelys coriacea)
+"Dermochelys coriacea"[Organism] AND COI[Gene] AND mitochondrion[Filter]
+
+Dermochelys coriacea voucher
+
+
+
+Cistude (Emys orbicularis ou autre espèce de Cistude précisée par le prof)
+"Emys orbicularis"[Organism] AND COI[Gene] AND mitochondrion[Filter]
+
+Emys orbicularis voucher
