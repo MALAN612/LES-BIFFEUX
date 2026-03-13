@@ -107,6 +107,11 @@ boot_K80 <- boot.phylo(phy = arbre_K80, x = as.matrix(dna), FUN = function(xx) n
 boot_TN <- boot.phylo(phy = arbre_TN, x = as.matrix(dna), FUN = function(xx) nj(dist.dna(xx,pairwise.deletion = FALSE, model = "TN93")), B = 1000)
 boot_GG95 <- boot.phylo(phy = arbre_GG95, x = as.matrix(dna), FUN = function(xx) nj(dist.dna(xx,pairwise.deletion = FALSE, model = "GG95")), B = 1000)
 
+summary(boot_JC)
+summary(boot_K80)
+summary(boot_TN)
+summary(boot_GG95)
+
 par(mfrow=c(2,2), mar=c(1,1,3,1))
 plot(arbre_JC, main="Jukes et Cantor")
 nodelabels(boot_JC/10, frame="circle", bg="white", cex=0.6)
@@ -128,12 +133,55 @@ dna_phy <- as.phyDat(dna)
 
 # Test de modèles
 model_test <- phangorn::modelTest(dna_phy)
-
 model_test
 
-# Modèle avec le plus petit AICc
-best_model <- model_test$Model[which.min(model_test$AICc)]
+# tester le smodèles évolutifs
+env <- attr(model_test, "env")
+ls(env = env)
+
+best_model <- model_test[which.min(model_test$AIC), ]
 best_model
+
+dm <- dist.ml(dna_phy)
+
+treeNJ <- NJ(dm)
+
+plot(treeNJ, main="Neighbor-Joining")
+
+fit <- pml(treeNJ, data = dna_phy)
+
+fitGTR <- update(fit, k = 4, inv = 0.2)
+fitGTR <- optim.pml(
+    fitGTR,
+    model = "GTR",
+    optInv = TRUE,
+    optGamma = TRUE,
+    rearrangement = "stochastic",
+    control = pml.control(trace = 0)
+)
+
+bs <- bootstrap.pml(
+    fitGTR,
+    bs = 1000,
+    optNni = TRUE,
+    control = pml.control(trace = 0)
+)
+
+plotBS(
+    midpoint(fitGTR$tree),
+    bs,
+    p = 0,
+    type = "p",
+    frame = "circle",
+    cex = 0.6,
+    bs.adj = c(0.5,0.5),
+    bg = "white"
+)
+
+
+
+
+
 
 # arbre NJ initial
 tree_start <- nj(dist.dna(dna))
